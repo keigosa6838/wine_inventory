@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🍷 私人酒窖庫存管理</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700&family=EB+Garamond:ital,wght@0,400;0,500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:     #0b1520;
+    --gold:   #c9a84c;
+    --gold2:  #e8c96a;
+    --cream:  #f0e6cc;
+    --muted:  #8aabcc;
+    --dim:    #4a6a8a;
+    --border: rgba(139,105,20,0.35);
+    --red:    #e07060;
+    --green:  #6fcf97;
+    --blue:   #7aabcc;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--cream); font-family:'EB Garamond',Georgia,serif; font-size:14px; min-height:100vh; }
+
+  #header { position:sticky; top:0; z-index:100; background:linear-gradient(90deg,var(--bg) 0%,#1c3557 40%,#253f5c 60%,var(--bg) 100%); border-bottom:1px solid var(--gold); padding:18px 24px 13px; box-shadow:0 4px 32px rgba(0,0,0,0.6); }
+  #header-top { display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap; }
+  .cave-label { font-family:'Cormorant Garamond',serif; font-size:9px; letter-spacing:5px; color:var(--gold); text-transform:uppercase; margin-bottom:4px; }
+  h1 { font-family:'Cormorant Garamond',serif; font-size:24px; font-weight:600; color:var(--cream); letter-spacing:1px; }
+  .subtitle { font-size:11px; color:var(--muted); margin-top:4px; display:flex; align-items:center; gap:8px; }
+  .sync-badge { font-size:9px; color:#4caf7d; background:rgba(76,175,80,0.12); border:1px solid rgba(76,175,80,0.3); border-radius:4px; padding:2px 8px; letter-spacing:1px; }
+  .stats { margin-left:auto; display:flex; gap:20px; align-items:flex-end; flex-wrap:wrap; }
+  .stat { text-align:right; }
+  .stat-label { font-size:8px; color:var(--dim); letter-spacing:2px; text-transform:uppercase; margin-bottom:2px; }
+  .stat-val { font-family:'Cormorant Garamond',serif; font-size:17px; font-weight:600; }
+  .stat-val.gold { color:var(--gold); }
+  .stat-val.red  { color:var(--red); }
+  #sync-msg { font-size:11px; min-width:190px; text-align:right; }
+  #sync-msg.saving { color:var(--muted); }
+  #sync-msg.saved  { color:var(--green); }
+  #sync-msg.error  { color:var(--red); }
+
+  #controls { margin-top:11px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  #search { background:rgba(255,255,255,0.06); border:1px solid #3a5a7a; border-radius:6px; padding:6px 12px; color:var(--cream); font-size:12px; font-family:inherit; width:210px; outline:none; }
+  #search::placeholder { color:var(--dim); }
+  #search:focus { border-color:var(--gold); }
+  .pill { background:transparent; border:1px solid #3a5a7a; border-radius:6px; color:#5a7a9a; font-size:10px; padding:5px 12px; cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:4px; }
+  .pill.active { background:rgba(201,168,76,0.12); border-color:var(--gold); color:var(--gold); }
+  .badge { background:var(--gold); color:var(--bg); border-radius:10px; padding:1px 6px; font-size:9px; font-family:sans-serif; }
+  #add-btn { margin-left:auto; background:rgba(201,168,76,0.1); border:1px solid var(--gold); border-radius:6px; color:var(--gold); font-size:10px; padding:5px 14px; cursor:pointer; font-family:inherit; }
+  #add-form { display:none; margin-top:10px; gap:7px; flex-wrap:wrap; align-items:center; background:rgba(255,255,255,0.03); border:1px solid rgba(201,168,76,0.2); border-radius:8px; padding:10px 12px; }
+  #add-form.open { display:flex; }
+
+  #table-wrap { padding:18px 18px 48px; max-width:1100px; margin:0 auto; }
+  #table { background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,0.5); }
+  .thead { display:flex; background:rgba(28,53,87,0.9); border-bottom:1px solid var(--gold); padding:9px 16px; }
+  .thead span { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--gold); }
+  .trow { display:flex; align-items:center; padding:10px 16px; border-bottom:1px solid rgba(255,255,255,0.04); min-height:58px; transition:background 0.15s; }
+  .trow:nth-child(odd)  { background:rgba(255,255,255,0.02); }
+  .trow:nth-child(even) { background:transparent; }
+  .trow.editing { background:rgba(201,168,76,0.06) !important; }
+  .tfoot { display:flex; background:rgba(28,53,87,0.75); border-top:1px solid var(--gold); padding:11px 16px; font-family:'Cormorant Garamond',serif; font-weight:600; }
+
+  .c-num   { flex:0 0 3%;  min-width:0; font-size:10px; color:var(--dim); }
+  .c-name  { flex:0 0 35%; min-width:0; padding-left:4px; }
+  .c-vin   { flex:0 0 9%;  min-width:0; text-align:center; font-size:11px; color:var(--muted); }
+  .c-qty   { flex:0 0 9%;  min-width:0; text-align:center; }
+  .c-price { flex:0 0 15%; min-width:0; text-align:right; }
+  .c-sub   { flex:0 0 15%; min-width:0; text-align:right; }
+  .c-act   { flex:0 0 14%; min-width:0; display:flex; gap:4px; justify-content:center; flex-wrap:wrap; }
+  .thead .c-price,.thead .c-sub { text-align:right; }
+  .thead .c-vin,.thead .c-qty,.thead .c-act { text-align:center; }
+  .tfoot .c-name { color:var(--gold); font-size:13px; letter-spacing:1px; padding-left:4px; }
+  .tfoot .c-qty  { color:var(--cream); font-size:14px; text-align:center; }
+  .tfoot .c-sub  { color:var(--gold); font-size:14px; text-align:right; }
+  .wine-name { font-size:13px; color:var(--cream); line-height:1.5; }
+  .wine-note { font-size:10px; color:#6a8aaa; margin-top:2px; }
+
+  button { font-family:inherit; cursor:pointer; transition:opacity 0.15s; }
+  button:active { opacity:0.7; }
+  .btn-edit    { background:rgba(255,255,255,0.05); border:1px solid #3a5a7a; border-radius:5px; color:var(--blue); font-size:10px; padding:3px 9px; }
+  .btn-del     { background:rgba(192,57,43,0.08); border:1px solid rgba(192,57,43,0.35); border-radius:5px; color:var(--red); font-size:10px; padding:3px 7px; }
+  .btn-save    { background:var(--gold); border:none; border-radius:5px; color:var(--bg); font-size:10px; font-weight:bold; padding:3px 9px; }
+  .btn-cancel  { background:transparent; border:1px solid #3a5a7a; border-radius:5px; color:#5a7a9a; font-size:10px; padding:3px 7px; }
+  .btn-confirm { background:var(--gold); border:none; border-radius:5px; color:var(--bg); font-size:11px; font-weight:bold; padding:6px 16px; }
+  input.ei { background:rgba(255,255,255,0.07); border:1px solid var(--gold); border-radius:5px; padding:4px 7px; color:var(--cream); font-size:12px; font-family:inherit; outline:none; }
+  input.ei::placeholder { color:var(--dim); }
+
+  .empty { text-align:center; padding:40px; color:var(--dim); font-size:13px; }
+  .footer-note { margin-top:14px; font-size:9px; color:#2a5a3a; text-align:center; letter-spacing:1px; }
+
+  #loading { position:fixed; inset:0; background:var(--bg); z-index:200; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; }
+  #loading .wi { font-size:48px; animation:pulse 1.5s ease-in-out infinite; }
+  #loading p { color:var(--gold); font-size:13px; letter-spacing:3px; font-family:'Cormorant Garamond',serif; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="wi">🍷</div><p>從 Google Sheets 載入酒窖資料…</p></div>
+
+<div id="header">
+  <div id="header-top">
+    <div>
+      <div class="cave-label">Cave Privée · 私人酒窖</div>
+      <h1>酒類庫存管理</h1>
+      <div class="subtitle">
+        <span>寄庫明細 · 2025/04/10</span>
+        <span class="sync-badge">☁ Google Sheets 同步</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div id="sync-msg"></div>
+      <div class="stat"><div class="stat-label">總瓶數</div><div class="stat-val" id="s-qty">—</div></div>
+      <div class="stat"><div class="stat-label">已估總值</div><div class="stat-val gold" id="s-val">—</div></div>
+      <div class="stat" id="s-miss-wrap" style="display:none"><div class="stat-label">待填單價</div><div class="stat-val red" id="s-miss">—</div></div>
+    </div>
+  </div>
+  <div id="controls">
+    <input id="search" placeholder="搜尋酒名或年份…" oninput="renderTable()">
+    <button class="pill active" id="pill-all"     onclick="setFilter('all')">全部</button>
+    <button class="pill"        id="pill-missing" onclick="setFilter('missing')">待填單價 <span class="badge" id="miss-badge" style="display:none"></span></button>
+    <button id="add-btn" onclick="toggleAdd()">＋ 新增酒款</button>
+  </div>
+  <div id="add-form">
+    <input class="ei" placeholder="酒名 *" id="nw-name"  style="flex:3;min-width:140px">
+    <input class="ei" placeholder="年份"   id="nw-vin"   style="flex:1;min-width:60px">
+    <input class="ei" placeholder="瓶數"   id="nw-qty"   style="flex:1;min-width:60px" type="number">
+    <input class="ei" placeholder="單價"   id="nw-price" style="flex:1;min-width:80px" type="number">
+    <input class="ei" placeholder="備註"   id="nw-note"  style="flex:2;min-width:100px">
+    <button class="btn-confirm" onclick="addWine()">確認新增</button>
+  </div>
+</div>
+
+<div id="table-wrap">
+  <div id="table">
+    <div class="thead">
+      <span class="c-num">#</span>
+      <span class="c-name" style="padding-left:4px">酒名</span>
+      <span class="c-vin">年份</span>
+      <span class="c-qty">瓶數</span>
+      <span class="c-price">單價</span>
+      <span class="c-sub">小計</span>
+      <span class="c-act">操作</span>
+    </div>
+    <div id="tbody"></div>
+    <div class="tfoot">
+      <span class="c-num"></span>
+      <span class="c-name">合　計</span>
+      <span class="c-vin"></span>
+      <span class="c-qty" id="f-qty">—</span>
+      <span class="c-price"></span>
+      <span class="c-sub" id="f-val">—</span>
+      <span class="c-act"></span>
+    </div>
+  </div>
+  <div class="footer-note">☁ 所有變更自動同步至 Google Sheets「酒庫管理」</div>
+</div>
+
+<script>
+var GAS = "https://script.google.com/macros/s/AKfycbwVUd3IpsVuH8w_kkSOumY1llmqFQsTkzKWrLXlJ1Aw5NxGqXLQcUzeFo5MV9mptOAK/exec";
+
+var DEFAULTS = [
+  {id:1,  name:"木桐堡二軍－小木桐紅酒",           vintage:"2021", qty:6,  price:7600,  note:""},
+  {id:2,  name:"香檳王 禮盒版",                     vintage:"2015", qty:6,  price:6583,  note:""},
+  {id:3,  name:"拉圖堡二軍",                         vintage:"2018", qty:6,  price:8333,  note:""},
+  {id:4,  name:"GAJA Barbaresco 紅酒",               vintage:"2022", qty:6,  price:9750,  note:""},
+  {id:5,  name:"香檳王",                             vintage:"2013", qty:6,  price:6600,  note:""},
+  {id:6,  name:"卡隆塞居堡 愛心堡一軍紅酒",         vintage:"2015", qty:6,  price:5242,  note:""},
+  {id:7,  name:"拉菲堡 一軍",                        vintage:"2022", qty:6,  price:31150, note:""},
+  {id:8,  name:"法國都薩克堡 紅酒",                  vintage:"2018", qty:18, price:1917,  note:""},
+  {id:9,  name:"法國都薩克堡 紅酒",                  vintage:"2021", qty:24, price:1958,  note:""},
+  {id:10, name:"Château Pontet-Canet",               vintage:"2017", qty:12, price:3800,  note:""},
+  {id:11, name:"卡比隆酒莊紅酒",                     vintage:"2022", qty:6,  price:null,  note:""},
+  {id:12, name:"日日 秋津山田錦 生酛仕込 720ml",     vintage:"-",    qty:4,  price:null,  note:""},
+  {id:13, name:"林奇貝居堡一軍紅酒",                 vintage:"2014", qty:12, price:null,  note:""},
+  {id:14, name:"小布施 ちゃぶ台（赤）750ml",         vintage:"2024", qty:6,  price:null,  note:""},
+  {id:15, name:"培瑞酒莊 柏卡斯特城堡 教皇新堡紅酒", vintage:"2022", qty:18, price:3216,  note:""},
+];
+
+var wines     = [];
+var editing   = null;
+var filter    = 'all';
+var saveTimer = null;
+
+// ── API（全部 GET，無 CORS 問題）─────────────────────────────────────────
+function apiGet() {
+  return fetch(GAS + '?action=get').then(function(r){ return r.json(); });
+}
+
+function apiSet(data) {
+  // 用 GET + data 參數寫入，完全避開 CORS
+  var encoded = encodeURIComponent(JSON.stringify(data));
+  return fetch(GAS + '?action=set&data=' + encoded).then(function(r){ return r.json(); });
+}
+
+// ── Sync ──────────────────────────────────────────────────────────────────
+function setSyncMsg(cls, txt) {
+  var el = document.getElementById('sync-msg');
+  el.className = cls; el.textContent = txt;
+}
+
+function scheduleSave() {
+  setSyncMsg('saving', '⏳ 同步中…');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(function() {
+    apiSet(wines).then(function(res) {
+      if (res.ok) {
+        setSyncMsg('saved', '✓ 已同步至 Google Sheets');
+        setTimeout(function(){ setSyncMsg('',''); }, 3000);
+      } else {
+        setSyncMsg('error', '⚠ 同步失敗：' + (res.error||''));
+      }
+    }).catch(function(e) {
+      setSyncMsg('error', '⚠ 網路錯誤');
+    });
+  }, 800);
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+function ntd(n) { return 'NT$ ' + Number(n).toLocaleString('zh-TW'); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function updateStats() {
+  var tq = wines.reduce(function(s,w){ return s+w.qty; }, 0);
+  var tv = wines.reduce(function(s,w){ return w.price ? s+w.qty*w.price : s; }, 0);
+  var ms = wines.filter(function(w){ return !w.price; }).length;
+  document.getElementById('s-qty').textContent = tq + ' 瓶';
+  document.getElementById('s-val').textContent = ntd(tv);
+  document.getElementById('f-qty').textContent = tq + ' 瓶';
+  document.getElementById('f-val').textContent = ntd(tv);
+  var mw = document.getElementById('s-miss-wrap');
+  var mb = document.getElementById('miss-badge');
+  if (ms > 0) {
+    mw.style.display = '';
+    document.getElementById('s-miss').textContent = ms + ' 款';
+    mb.style.display = ''; mb.textContent = ms;
+  } else {
+    mw.style.display = 'none'; mb.style.display = 'none';
+  }
+}
+
+function setFilter(f) {
+  filter = f;
+  document.getElementById('pill-all').classList.toggle('active', f==='all');
+  document.getElementById('pill-missing').classList.toggle('active', f==='missing');
+  renderTable();
+}
+
+function renderTable() {
+  var q = document.getElementById('search').value.toLowerCase();
+  var tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+
+  var rows = wines.filter(function(w) {
+    return (w.name.toLowerCase().includes(q) || String(w.vintage).includes(q)) &&
+           (filter==='all' || (filter==='missing' && !w.price));
+  });
+
+  if (!rows.length) {
+    tbody.innerHTML = '<div class="empty">無符合的記錄</div>';
+    updateStats(); return;
+  }
+
+  rows.forEach(function(w) {
+    var ed  = editing === w.id;
+    var sub = w.price ? w.qty * w.price : null;
+
+    var noteHtml = ed
+      ? '<input class="ei" id="ed-note" value="'+esc(w.note||'')+'" placeholder="備註…" style="width:90%;margin-top:4px;font-size:10px">'
+      : (w.note ? '<div class="wine-note">'+esc(w.note)+'</div>' : '');
+
+    var qtyHtml = ed
+      ? '<input class="ei" id="ed-qty" type="number" value="'+w.qty+'" style="width:50px;text-align:center">'
+      : '<span style="font-size:13px">'+w.qty+'</span>';
+
+    var priceHtml = ed
+      ? '<input class="ei" id="ed-price" type="number" value="'+(w.price||'')+'" placeholder="單價" style="width:100px;text-align:right">'
+      : '<span style="font-size:11px;color:'+(w.price?'var(--cream)':'var(--red)')+';font-style:'+(w.price?'normal':'italic')+'">'+(w.price?ntd(w.price):'待填入')+'</span>';
+
+    var actHtml = ed
+      ? '<button class="btn-save" onclick="commitEdit('+w.id+')">儲存</button><button class="btn-cancel" onclick="cancelEdit()">取消</button>'
+      : '<button class="btn-edit" onclick="startEdit('+w.id+')">編輯</button><button class="btn-del" onclick="delWine('+w.id+')">刪除</button>';
+
+    var div = document.createElement('div');
+    div.className = 'trow' + (ed ? ' editing' : '');
+    div.innerHTML =
+      '<span class="c-num">'+w.id+'</span>'+
+      '<div class="c-name"><div class="wine-name">'+esc(w.name)+'</div>'+noteHtml+'</div>'+
+      '<span class="c-vin">'+esc(w.vintage)+'</span>'+
+      '<div class="c-qty">'+qtyHtml+'</div>'+
+      '<div class="c-price">'+priceHtml+'</div>'+
+      '<div class="c-sub"><span style="font-size:11px;color:'+(sub?'var(--gold)':'#2a4a6a')+'">'+(sub?ntd(sub):'—')+'</span></div>'+
+      '<div class="c-act">'+actHtml+'</div>';
+    tbody.appendChild(div);
+  });
+  updateStats();
+}
+
+// ── Edit ──────────────────────────────────────────────────────────────────
+function startEdit(id)  { editing = id; renderTable(); }
+function cancelEdit()   { editing = null; renderTable(); }
+function commitEdit(id) {
+  var note  = document.getElementById('ed-note') ? document.getElementById('ed-note').value : '';
+  var qty   = parseInt(document.getElementById('ed-qty').value) || 0;
+  var pv    = document.getElementById('ed-price').value;
+  wines = wines.map(function(w) {
+    return w.id !== id ? w : Object.assign({}, w, {
+      note:  note,
+      qty:   qty,
+      price: pv === '' ? null : Number(pv),
+    });
+  });
+  editing = null;
+  renderTable();
+  scheduleSave();
+}
+
+function delWine(id) {
+  if (!confirm('確認刪除此酒款？')) return;
+  wines = wines.filter(function(w){ return w.id !== id; });
+  renderTable();
+  scheduleSave();
+}
+
+// ── Add ───────────────────────────────────────────────────────────────────
+function toggleAdd() {
+  var f = document.getElementById('add-form');
+  var o = f.classList.toggle('open');
+  document.getElementById('add-btn').textContent = o ? '✕ 取消' : '＋ 新增酒款';
+}
+
+function addWine() {
+  var name = document.getElementById('nw-name').value.trim();
+  if (!name) { alert('請填入酒名'); return; }
+  var id = Math.max.apply(null, [0].concat(wines.map(function(w){ return w.id; }))) + 1;
+  var pv = document.getElementById('nw-price').value;
+  wines.push({
+    id:      id,
+    name:    name,
+    vintage: document.getElementById('nw-vin').value.trim() || '-',
+    qty:     parseInt(document.getElementById('nw-qty').value) || 1,
+    price:   pv === '' ? null : Number(pv),
+    note:    document.getElementById('nw-note').value.trim(),
+  });
+  ['nw-name','nw-vin','nw-qty','nw-price','nw-note'].forEach(function(i){
+    document.getElementById(i).value = '';
+  });
+  toggleAdd();
+  renderTable();
+  scheduleSave();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+setSyncMsg('saving', '☁ 連接 Google Sheets…');
+apiGet().then(function(res) {
+  if (res.ok && res.data && res.data.length > 0) {
+    wines = res.data;
+    setSyncMsg('saved', '✓ 資料載入成功');
+  } else {
+    wines = DEFAULTS.map(function(w){ return Object.assign({}, w); });
+    setSyncMsg('saving', '⏳ 初始化資料…');
+    return apiSet(wines).then(function() {
+      setSyncMsg('saved', '✓ 初始資料已寫入');
+    });
+  }
+}).catch(function() {
+  setSyncMsg('error', '⚠ 無法連接，顯示預設資料');
+  wines = DEFAULTS.map(function(w){ return Object.assign({}, w); });
+}).then(function() {
+  setTimeout(function(){ setSyncMsg('',''); }, 3500);
+  document.getElementById('loading').style.display = 'none';
+  renderTable();
+});
+</script>
+</body>
+</html>
